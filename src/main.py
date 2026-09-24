@@ -62,7 +62,8 @@ class App(tk.Tk):
     def _build_menu(self):
         menubar = tk.Menu(self)
         fichier = tk.Menu(menubar, tearoff=0)
-        fichier.add_command(label="Générer le modèle de balance…", command=self._gen_modele_balance)
+        fichier.add_command(label="Télécharger le modèle de balance N…", command=self._gen_modele_balance_n)
+        fichier.add_command(label="Télécharger le modèle de balance N-1…", command=self._gen_modele_balance_n1)
         fichier.add_command(label="Générer le modèle de budget…", command=self._gen_modele_budget)
         fichier.add_separator()
         fichier.add_command(label="Quitter", command=self.destroy)
@@ -151,7 +152,8 @@ class App(tk.Tk):
         self.generate_btn = ttk.Button(self.action_frame, text="Générer la liasse Excel",
                                         command=self._generate)
         self.generate_btn.pack(side="left")
-        ttk.Button(self.action_frame, text="Modèle de balance", command=self._gen_modele_balance).pack(side="left", padx=8)
+        ttk.Button(self.action_frame, text="Télécharger modèle Balance N", command=self._gen_modele_balance_n).pack(side="left", padx=8)
+        ttk.Button(self.action_frame, text="Télécharger modèle Balance N-1", command=self._gen_modele_balance_n1).pack(side="left", padx=8)
         ttk.Button(self.action_frame, text="Modèle de budget", command=self._gen_modele_budget).pack(side="left")
 
         # --- Journal ---
@@ -236,19 +238,30 @@ class App(tk.Tk):
             self.adj_list.delete(idx)
             del self.ajustements[idx]
 
-    def _gen_modele_balance(self):
-        path = filedialog.asksaveasfilename(title="Enregistrer le modèle de balance",
-                                             defaultextension=".xlsx",
-                                             initialfile="modele_balance_sycebnl.xlsx",
-                                             filetypes=[("Excel", "*.xlsx")])
+    def _gen_modele_balance_n(self):
+        self._gen_modele_balance("N")
+
+    def _gen_modele_balance_n1(self):
+        self._gen_modele_balance("N-1")
+
+    def _gen_modele_balance(self, period_label):
+        safe_label = period_label.replace("-", "_minus_")
+        path = filedialog.asksaveasfilename(
+            title=f"Télécharger le modèle de balance {period_label}",
+            defaultextension=".xlsx",
+            initialfile=f"modele_balance_{safe_label}_sycebnl.xlsx",
+            filetypes=[("Fichier Excel (.xlsx)", "*.xlsx")])
         if not path:
             return
         try:
-            templates.create_balance_template(path)
-            self._log(f"Modèle de balance créé : {path}")
-            messagebox.showinfo(APP_TITLE, "Modèle de balance créé avec succès.")
+            templates.create_balance_template(path, period_label=period_label)
+            self._log(f"Modèle de balance {period_label} créé : {path}")
+            messagebox.showinfo(
+                APP_TITLE,
+                f"Le modèle de balance {period_label} a été créé au format Excel (.xlsx).\n\n"
+                "Remplissez-le puis revenez dans l'application pour l'importer.")
         except Exception as e:
-            self._log(f"Erreur lors de la création du modèle : {e}")
+            self._log(f"Erreur lors de la création du modèle {period_label} : {e}")
             messagebox.showerror(APP_TITLE, str(e))
 
     def _gen_modele_budget(self):

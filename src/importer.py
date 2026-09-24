@@ -66,7 +66,17 @@ def _read_any(path: Path) -> pd.DataFrame:
     if not path.exists():
         raise ImportError_(f"Fichier introuvable : {path}")
     if path.suffix.lower() in (".xlsx", ".xlsm", ".xls"):
-        return pd.read_excel(path, dtype=str)
+        # Les modèles générés par l'application contiennent un titre et une
+        # notice avant la ligne d'en-têtes. On recherche donc automatiquement
+        # la vraie ligne des colonnes au lieu de supposer qu'elle est en ligne 1.
+        preview = pd.read_excel(path, header=None, dtype=str, nrows=15)
+        header_row = None
+        for idx in range(len(preview)):
+            values = {_normalize_col(v) for v in preview.iloc[idx].dropna().tolist()}
+            if "compte" in values and ("debit" in values or "débit" in values) and ("credit" in values or "crédit" in values):
+                header_row = idx
+                break
+        return pd.read_excel(path, header=header_row if header_row is not None else 0, dtype=str)
     elif path.suffix.lower() in (".csv", ".txt"):
         # tente plusieurs séparateurs courants
         for sep in [";", ",", "\t"]:

@@ -17,11 +17,12 @@ LEGEND_FONT = Font(name=FONT_NAME, size=9, italic=True, color="808080")
 EXAMPLE_FILL = PatternFill("solid", fgColor="FFF2CC")
 
 
-def create_balance_template(path):
+def create_balance_template(path, period_label="N"):
     wb = Workbook()
     ws = wb.active
     ws.title = "Balance"
-    ws["A1"] = "Modèle de balance des comptes SYCEBNL — à importer dans le logiciel"
+    period_label = str(period_label).strip().upper() or "N"
+    ws["A1"] = f"Modèle de balance des comptes SYCEBNL — Balance {period_label} — à importer dans le logiciel"
     ws["A1"].font = Font(name=FONT_NAME, size=12, bold=True)
     ws["A2"] = ("Renseignez une ligne par compte utilisé (ne pas insérer de ligne de "
                 "total). Les colonnes peuvent être réordonnées mais leurs en-têtes "
