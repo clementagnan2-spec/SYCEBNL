@@ -26,7 +26,7 @@ import excel_export
 import templates
 
 APP_TITLE = "Générateur de liasse SYCEBNL"
-APP_VERSION = "1.0.0"
+APP_VERSION = "2.0.0"
 
 
 def resource_path(relative_path):
@@ -81,8 +81,7 @@ class App(tk.Tk):
         title.pack(anchor="w")
         subtitle = ttk.Label(
             outer,
-            text="Génère le Bilan, le Compte de résultat et les états complémentaires "
-                 "à partir d'une balance des comptes SYCEBNL (OHADA).",
+            text="Utilise le template SYCEBNL fourni comme modèle de la liasse et le remplit à partir de la balance comptable.",
             font=("Arial", 9), foreground="#555555")
         subtitle.pack(anchor="w", pady=(0, 10))
 
@@ -342,13 +341,13 @@ class App(tk.Tk):
                 return
 
             excel_export.export_liasse(result, out_path, entite, exercice)
-            self._log(f"✓ Liasse générée avec succès : {out_path}")
+            self._log(f"✓ Liasse SYCEBNL générée dans le template officiel : {out_path}")
 
             bilan_ok = result["bilan"]["equilibre"]
             if not bilan_ok:
                 self._log(f"⚠ ATTENTION : le bilan n'est pas équilibré (écart = "
                            f"{result['bilan']['ecart']:,.0f}). Vérifiez la balance importée.")
-            messagebox.showinfo(APP_TITLE, "Liasse générée avec succès :\n" + out_path)
+            messagebox.showinfo(APP_TITLE, "Liasse SYCEBNL générée dans le template officiel :\n" + out_path)
 
         except importer.ImportError_ as e:
             self._log(f"✗ Erreur d'import : {e}")
