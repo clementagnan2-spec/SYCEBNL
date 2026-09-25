@@ -121,7 +121,7 @@ def build_reconciliation_tresorerie(lines, solde_releves_bancaires=None, ajustem
 
 
 def generate(balance_df, budget_df=None, tresorerie_ouverture=0.0,
-             solde_releves_bancaires=None, ajustements=None):
+             solde_releves_bancaires=None, ajustements=None, balance_n1_df=None):
     lines, non_classes = classify_balance(balance_df)
     resultat = resultat_net(lines)
     bilan = build_bilan(lines, resultat)
@@ -129,6 +129,9 @@ def generate(balance_df, budget_df=None, tresorerie_ouverture=0.0,
     ressources_emplois = build_ressources_emplois(lines, tresorerie_ouverture)
     execution_budgetaire = build_execution_budgetaire(lines, budget_df)
     reconciliation = build_reconciliation_tresorerie(lines, solde_releves_bancaires, ajustements)
+    lines_n1 = None
+    if balance_n1_df is not None:
+        lines_n1, _ = classify_balance(balance_n1_df)
     notes = build_notes_annexes(lines, non_classes, resultat)
     notes.append("5. Mode 'Projet de développement' : les états spécifiques (Ressources-"
                  "Emplois, exécution budgétaire, réconciliation de trésorerie) complètent "
@@ -137,7 +140,10 @@ def generate(balance_df, budget_df=None, tresorerie_ouverture=0.0,
 
     return {
         "mode": "projet",
+        "balance_source": balance_df.copy(),
+        "balance_n1_source": balance_n1_df.copy() if balance_n1_df is not None else None,
         "lines": lines,
+        "lines_n1": lines_n1,
         "non_classes": non_classes,
         "bilan": bilan,
         "compte_resultat": compte_resultat,

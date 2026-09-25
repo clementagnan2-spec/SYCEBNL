@@ -30,3 +30,11 @@ pyinstaller sycebnl_liasse.spec --noconfirm --clean
 Le fichier `sycebnl_liasse.spec` embarque désormais les quatre fichiers Excel du dossier `templates/`.
 
 Le résultat doit être vérifié par un professionnel comptable avant tout dépôt réglementaire.
+
+## Mise à jour v2.2.0
+
+- Les balances N et N-1 importées sont recopiées dans les feuilles officielles de balance de la liasse (`BALANCE N` / `FeuiBALANCE N-1` en AOP, `ANNEE N` / `ANNEE N-1` en Projet).
+- Les colonnes Débit/Crédit de la balance source alimentent les soldes de clôture débiteur/créditeur de l'imprimé fiscal.
+- Une fiche d'identification complète est disponible avant génération et alimente la feuille `IDENTIFICATION` du template.
+- La date de l'exercice précédent est calculée automatiquement à partir de la date de clôture.
+- En mode Projet, la balance N-1 est désormais disponible et injectée dans le template fiscal.

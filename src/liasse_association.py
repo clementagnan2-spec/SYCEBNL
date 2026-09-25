@@ -181,6 +181,8 @@ def generate(balance_df, balance_n1_df=None):
 
     return {
         "mode": "association",
+        "balance_source": balance_df.copy(),
+        "balance_n1_source": balance_n1_df.copy() if balance_n1_df is not None else None,
         "lines": lines,
         "lines_n1": lines_n1 if balance_n1_df is not None else None,
         "non_classes": non_classes,

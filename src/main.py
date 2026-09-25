@@ -10,7 +10,7 @@ que pour la compilation en .exe via PyInstaller.
 import os
 import sys
 import traceback
-from datetime import date
+from datetime import date, datetime, timedelta
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
@@ -26,7 +26,7 @@ import excel_export
 import templates
 
 APP_TITLE = "Générateur de liasse SYCEBNL"
-APP_VERSION = "2.1.0"
+APP_VERSION = "2.2.0"
 
 
 def resource_path(relative_path):
@@ -51,6 +51,17 @@ class App(tk.Tk):
         self.tresorerie_ouverture = tk.StringVar(value="0")
         self.solde_releves = tk.StringVar()
         self.ajustements = []  # liste de {"libelle": str, "montant": float}
+        # Fiche d'identification complète, alimentant la feuille officielle IDENTIFICATION.
+        self.identification = {
+            "denomination": "", "denomination_suite": "", "sigle": "",
+            "adresse_postale": "", "ifu": "", "adresse_geographique": "",
+            "nes": "", "exercice_precedent": "", "date_debut": "", "date_fin": "",
+            "duree_mois": 12, "centre_impots": "", "pays": "BURKINA FASO",
+            "recepisse": "", "cnss": "", "telephone": "",
+            "projet_designation": "", "projet_suite": "", "projet_sigle": "",
+            "projet_code": "", "projet_date_debut": "", "projet_date_fin": "",
+        }
+        self.identification_status = tk.StringVar(value="Fiche d'identification à compléter")
 
         self._build_menu()
         self._build_layout()
@@ -95,15 +106,17 @@ class App(tk.Tk):
                          variable=self.mode, value="projet",
                          command=self._on_mode_change).pack(side="left", padx=10)
 
-        # --- Bloc identification ---
-        id_frame = ttk.LabelFrame(outer, text="2. Identification", padding=10)
+        # --- Bloc fiche d'identification ---
+        id_frame = ttk.LabelFrame(outer, text="2. Fiche d'identification", padding=10)
         id_frame.pack(fill="x", pady=6)
         id_frame.columnconfigure(1, weight=1)
-        id_frame.columnconfigure(3, weight=1)
-        ttk.Label(id_frame, text="Nom de l'entité :").grid(row=0, column=0, sticky="w", padx=4, pady=4)
-        ttk.Entry(id_frame, textvariable=self.entite_nom).grid(row=0, column=1, sticky="ew", padx=4, pady=4)
-        ttk.Label(id_frame, text="Date de clôture (ex. 2025-12-31) :").grid(row=0, column=2, sticky="w", padx=4, pady=4)
-        ttk.Entry(id_frame, textvariable=self.exercice, width=16).grid(row=0, column=3, sticky="w", padx=4, pady=4)
+        ttk.Button(id_frame, text="Ouvrir / remplir la fiche d'identification…",
+                   command=self._open_identification).grid(row=0, column=0, padx=4, pady=4, sticky="w")
+        ttk.Label(id_frame, textvariable=self.identification_status, foreground="#555555").grid(
+            row=0, column=1, sticky="w", padx=8, pady=4)
+        ttk.Label(id_frame, text="Clôture :").grid(row=0, column=2, sticky="e", padx=4)
+        ttk.Entry(id_frame, textvariable=self.exercice, width=14, state="readonly").grid(
+            row=0, column=3, sticky="w", padx=4)
 
         # --- Bloc fichiers ---
         self.files_frame = ttk.LabelFrame(outer, text="3. Données comptables", padding=10)
@@ -186,7 +199,8 @@ class App(tk.Tk):
             self._set_row_state(self.files_frame, self.row_budget, False)
             self.projet_frame.pack_forget()
         else:
-            self._set_row_state(self.files_frame, self.row_balance_n1, False)
+            # Le template fiscal Projet contient lui aussi ANNEE N et ANNEE N-1.
+            self._set_row_state(self.files_frame, self.row_balance_n1, True)
             self._set_row_state(self.files_frame, self.row_budget, True)
             self.projet_frame.pack(fill="x", pady=6, before=self.action_frame)
 
@@ -197,6 +211,117 @@ class App(tk.Tk):
                 w.grid()
             else:
                 w.grid_remove()
+
+    def _open_identification(self):
+        win = tk.Toplevel(self)
+        win.title("Fiche d'identification SYCEBNL")
+        win.geometry("900x720")
+        win.minsize(820, 650)
+        win.transient(self)
+        win.grab_set()
+
+        outer = ttk.Frame(win, padding=12)
+        outer.pack(fill="both", expand=True)
+        ttk.Label(outer, text="FICHE D'IDENTIFICATION", font=("Arial", 15, "bold")).pack(anchor="w")
+        ttk.Label(outer, text="Ces informations seront reportées dans la feuille officielle IDENTIFICATION avant la génération de la liasse.",
+                  foreground="#555555").pack(anchor="w", pady=(2, 10))
+
+        canvas = tk.Canvas(outer, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        form = ttk.Frame(canvas, padding=6)
+        form.columnconfigure(1, weight=1)
+        form.columnconfigure(3, weight=1)
+        canvas.create_window((0, 0), window=form, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        fields = [
+            ("denomination", "Dénomination de l'entité *", "B2", 0, 0),
+            ("denomination_suite", "Suite dénomination", "B3", 1, 0),
+            ("sigle", "Sigle", "B4", 2, 0),
+            ("adresse_postale", "Adresse postale", "B5", 3, 0),
+            ("ifu", "N° d'identification fiscale (IFU)", "B7", 4, 0),
+            ("adresse_geographique", "Adresse géographique", "B8", 5, 0),
+            ("nes", "N° de télédéclarant (NES)", "H4", 6, 0),
+            ("centre_impots", "Centre des impôts", "B12", 7, 0),
+            ("pays", "Pays", "H12", 8, 0),
+            ("recepisse", "N° récépissé", "B13", 9, 0),
+            ("cnss", "N° CNSS", "E13", 10, 0),
+            ("telephone", "Téléphone", "H13", 11, 0),
+            ("date_debut", "Début exercice (AAAA-MM-JJ) *", "B11", 12, 0),
+            ("date_fin", "Clôture (AAAA-MM-JJ) *", "F11", 13, 0),
+            ("duree_mois", "Durée de l'exercice (mois)", "H11", 14, 0),
+        ]
+        vars_ = {}
+        for key, label, cell, row, _ in fields:
+            ttk.Label(form, text=label + ":").grid(row=row, column=0, sticky="w", padx=5, pady=4)
+            v = tk.StringVar(value=str(self.identification.get(key, "")))
+            vars_[key] = v
+            ttk.Entry(form, textvariable=v).grid(row=row, column=1, columnspan=3, sticky="ew", padx=5, pady=4)
+
+        r = len(fields) + 1
+        ttk.Separator(form).grid(row=r, column=0, columnspan=4, sticky="ew", pady=10)
+        ttk.Label(form, text="Identification du projet (utile en mode Projet)", font=("Arial", 11, "bold")).grid(
+            row=r+1, column=0, columnspan=4, sticky="w", padx=5, pady=(2, 6))
+        project_fields = [
+            ("projet_designation", "Désignation du projet", r+2),
+            ("projet_suite", "Suite désignation projet", r+3),
+            ("projet_sigle", "Sigle / abréviation du projet", r+4),
+            ("projet_code", "Code du projet", r+5),
+            ("projet_date_debut", "Date de début du projet (AAAA-MM-JJ)", r+6),
+            ("projet_date_fin", "Date de fin du projet (AAAA-MM-JJ)", r+7),
+        ]
+        for key, label, row in project_fields:
+            ttk.Label(form, text=label + ":").grid(row=row, column=0, sticky="w", padx=5, pady=4)
+            v = tk.StringVar(value=str(self.identification.get(key, "")))
+            vars_[key] = v
+            ttk.Entry(form, textvariable=v).grid(row=row, column=1, columnspan=3, sticky="ew", padx=5, pady=4)
+
+        def on_save():
+            data = {k: v.get().strip() for k, v in vars_.items()}
+            if not data["denomination"]:
+                messagebox.showwarning(APP_TITLE, "La dénomination de l'entité est obligatoire.", parent=win)
+                return
+            try:
+                end = datetime.strptime(data["date_fin"], "%Y-%m-%d")
+            except ValueError:
+                messagebox.showwarning(APP_TITLE, "La date de clôture doit être au format AAAA-MM-JJ.", parent=win)
+                return
+            if not data["date_debut"]:
+                data["date_debut"] = f"{end.year}-01-01"
+            try:
+                start = datetime.strptime(data["date_debut"], "%Y-%m-%d")
+            except ValueError:
+                messagebox.showwarning(APP_TITLE, "La date de début doit être au format AAAA-MM-JJ.", parent=win)
+                return
+            data["exercice_precedent"] = f"{end.year-1}-12-31"
+            if not data["duree_mois"]:
+                data["duree_mois"] = "12"
+            data["date_debut"] = start
+            data["date_fin"] = end
+            data["exercice_precedent"] = datetime(end.year-1, 12, 31)
+            data["duree_mois"] = int(data["duree_mois"])
+            for key in ("projet_date_debut", "projet_date_fin"):
+                if data[key]:
+                    try:
+                        data[key] = datetime.strptime(data[key], "%Y-%m-%d")
+                    except ValueError:
+                        messagebox.showwarning(APP_TITLE, f"{key} doit être au format AAAA-MM-JJ.", parent=win)
+                        return
+            self.identification.update(data)
+            self.entite_nom.set(data["denomination"])
+            self.exercice.set(end.strftime("%Y-%m-%d"))
+            self.identification_status.set(
+                f"✓ {data['denomination']} — exercice clos le {end.strftime('%d/%m/%Y')} — fiche enregistrée")
+            win.destroy()
+
+        bottom = ttk.Frame(outer)
+        bottom.pack(fill="x", pady=(8, 0))
+        ttk.Button(bottom, text="Enregistrer la fiche", command=on_save).pack(side="right")
+        ttk.Button(bottom, text="Annuler", command=win.destroy).pack(side="right", padx=8)
+        form.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        return win
 
     def _pick_balance(self):
         path = filedialog.askopenfilename(title="Sélectionner la balance N",
@@ -311,14 +436,25 @@ class App(tk.Tk):
             balance_df = importer.load_balance(self.chemin_balance.get())
             self._log(f"{len(balance_df)} ligne(s) importée(s).")
 
-            entite = self.entite_nom.get().strip() or "Entité"
+            # Une fiche d'identification complète est requise avant génération.
+            if not self.identification.get("denomination") or not self.identification.get("date_fin"):
+                self._log("Fiche d'identification incomplète : ouverture de la fiche…")
+                win = self._open_identification()
+                if win is not None:
+                    self.wait_window(win)
+                if not self.identification.get("denomination") or not self.identification.get("date_fin"):
+                    self._log("Génération annulée : fiche d'identification non renseignée.")
+                    return
+
+            entite = self.identification.get("denomination") or self.entite_nom.get().strip() or "Entité"
             exercice = self.exercice.get().strip()
+            balance_n1_df = None
+            if self.chemin_balance_n1.get():
+                self._log("Import de la balance N-1…")
+                balance_n1_df = importer.load_balance(self.chemin_balance_n1.get())
+                self._log(f"{len(balance_n1_df)} ligne(s) N-1 importée(s).")
 
             if self.mode.get() == "association":
-                balance_n1_df = None
-                if self.chemin_balance_n1.get():
-                    self._log("Import de la balance N-1…")
-                    balance_n1_df = importer.load_balance(self.chemin_balance_n1.get())
                 self._log("Calcul du Bilan, du Compte de résultat et des flux de trésorerie…")
                 result = liasse_association.generate(balance_df, balance_n1_df)
             else:
@@ -339,7 +475,7 @@ class App(tk.Tk):
                 self._log("Calcul du Bilan, du Compte de résultat, du Ressources-Emplois, "
                            "de l'exécution budgétaire et de la réconciliation de trésorerie…")
                 result = liasse_projet.generate(balance_df, budget_df, tresorerie_ouverture,
-                                                 solde_releves, list(self.ajustements))
+                                                 solde_releves, list(self.ajustements), balance_n1_df)
 
             if not result["non_classes"].empty:
                 self._log(f"⚠ {len(result['non_classes'])} compte(s) non classé(s) automatiquement "
@@ -353,7 +489,7 @@ class App(tk.Tk):
                 self._log("Génération annulée par l'utilisateur (aucun emplacement choisi).")
                 return
 
-            excel_export.export_liasse(result, out_path, entite, exercice)
+            excel_export.export_liasse(result, out_path, entite, exercice, self.identification)
             self._log(f"✓ Liasse SYCEBNL générée dans le template officiel : {out_path}")
 
             bilan_ok = result["bilan"]["equilibre"]

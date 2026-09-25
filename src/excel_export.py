@@ -37,41 +37,67 @@ def _copy_row_style(ws, src_row, dst_row, max_col=None):
             dst.protection = copy(src.protection)
 
 
-def _write_headers(wb, entite, exercice):
-    try:
-        end_date = dt.datetime.strptime(exercice, "%Y-%m-%d") if exercice else None
-    except ValueError:
-        end_date = None
-
+def _write_headers(wb, identification, exercice=""):
+    """Alimente la fiche IDENTIFICATION et les en-têtes liés au dossier."""
     ident = wb["IDENTIFICATION"] if "IDENTIFICATION" in wb.sheetnames else None
-    if ident:
-        ident["B2"] = entite
-        if end_date:
-            ident["H7"] = end_date.year
-            ident["B10"] = end_date
-            ident["F11"] = end_date
+    if ident is None:
+        return
 
-    # Les deux templates ont des zones d'identification communes.
+    data = identification or {}
+    def val(key, default=""):
+        return data.get(key, default)
+
+    # Cellules de la fiche officielle fournie dans les deux templates.
+    mapping = {
+        "B2": "denomination", "B3": "denomination_suite", "B4": "sigle",
+        "B5": "adresse_postale", "B7": "ifu", "B8": "adresse_geographique",
+        "G4": "nes", "B10": "exercice_precedent", "B11": "date_debut",
+        "F11": "date_fin", "H11": "duree_mois", "B12": "centre_impots",
+        "H12": "pays", "B13": "recepisse", "E13": "cnss", "H13": "telephone",
+        "B17": "projet_designation", "B18": "projet_suite",
+        "B19": "projet_sigle", "B20": "projet_code",
+        "B21": "projet_date_debut", "G21": "projet_date_fin",
+    }
+    for cell, key in mapping.items():
+        if key in data and data[key] not in (None, "") and not isinstance(ident[cell], MergedCell):
+            ident[cell] = data[key]
+
+    # Année d'établissement des états financiers.
+    if val("date_fin"):
+        ident["H7"] = val("date_fin").year
+
+    # Les autres feuillets officiels utilisent souvent les cellules ci-dessous
+    # pour reprendre automatiquement l'identification. On renseigne seulement
+    # les cellules libres, sans écraser les formules du template.
+    end_date = val("date_fin")
+    common = {
+        "denomination": val("denomination"),
+        "sigle": val("sigle"),
+        "ifu": val("ifu"),
+        "nes": val("nes"),
+        "adresse": val("adresse_postale"),
+    }
     for ws in wb.worksheets:
         if ws.title == "IDENTIFICATION":
             continue
-        for cell in ("C2", "J6", "F5", "B2"):
-            if cell in ws:
-                old = ws[cell].value
-                if old is not None and isinstance(old, str) and ("ATL2E" in old or old.strip() == ""):
-                    ws[cell] = entite
+        # Certaines feuilles AOP/projet utilisent des liens/formules vers IDENTIFICATION.
+        # Ne jamais remplacer une formule existante.
+        for cell, value in (("C2", common["denomination"]), ("C3", val("denomination_suite")),
+                            ("C4", common["sigle"]), ("C5", common["adresse"]),
+                            ("C6", common["ifu"]), ("C7", common["nes"])):
+            if value not in (None, "") and cell in ws and not isinstance(ws[cell], MergedCell):
+                if not (isinstance(ws[cell].value, str) and ws[cell].value.startswith("=")):
+                    ws[cell] = value
         if end_date:
             for cell in ("G6", "F6", "G13", "H13"):
-                if cell in ws and not isinstance(ws[cell], MergedCell) and ws[cell].value is None:
-                    ws[cell] = end_date
+                if cell in ws and not isinstance(ws[cell], MergedCell):
+                    if ws[cell].value is None:
+                        ws[cell] = end_date
 
-    # Les templates officiels affichent les dates d'exercice dans les états.
     for sheet, cells in {
         "BILAN": ("D15", "G15", "I15", "K15"),
-        "COMPTE-RESULTAT": ("E16",),
-        "TFT": ("E16",),
-        "CPTE EXPLOITATION": ("E16",),
-        "TER": ("E16",),
+        "COMPTE-RESULTAT": ("E16",), "TFT": ("E16",),
+        "CPTE EXPLOITATION": ("E16",), "TER": ("E16",),
     }.items():
         if end_date and sheet in wb.sheetnames:
             ws = wb[sheet]
@@ -88,28 +114,37 @@ def _clear_data_rows(ws, start_row, end_row, start_col=1, end_col=None):
 
 
 def _balance_rows(ws, df):
-    """Injecte une balance normalisée dans le format officiel à 8 colonnes."""
+    """Injecte la balance IMPORTÉE dans le format officiel à 8 colonnes.
+
+    Les fichiers d'entrée de l'application sont des balances débit/crédit.
+    Elles alimentent donc directement les colonnes de solde de clôture de
+    l'imprimé fiscal, sans réinterpréter les montants comme des mouvements.
+    Les colonnes d'ouverture et de mouvements restent à zéro faute de détail
+    fourni dans la balance source.
+    """
     start = 4
     old_end = max(ws.max_row, start)
     # Conserve les lignes d'en-tête et la mise en page de la première ligne de données.
     _clear_data_rows(ws, start, old_end, 1, 8)
 
-    rows = list(df.iterrows())
+    rows = list(df.iterrows()) if df is not None else []
     needed_end = start + len(rows) - 1
     for r in range(start, max(old_end, needed_end) + 1):
         if r > start:
             _copy_row_style(ws, start, r, 8)
 
     for i, (_, row) in enumerate(rows, start=start):
+        debit = float(row.get("debit", 0) or 0)
+        credit = float(row.get("credit", 0) or 0)
         ws.cell(i, 1).value = str(row.get("compte", ""))
         ws.cell(i, 2).value = row.get("intitule", "")
-        ws.cell(i, 3).value = float(row.get("solde_ouv_debit", 0) or 0)
-        ws.cell(i, 4).value = float(row.get("solde_ouv_credit", 0) or 0)
-        ws.cell(i, 5).value = float(row.get("debit", 0) or 0)
-        ws.cell(i, 6).value = float(row.get("credit", 0) or 0)
-        solde = float(row.get("solde", 0) or 0)
-        ws.cell(i, 7).value = max(solde, 0)
-        ws.cell(i, 8).value = max(-solde, 0)
+        # Balance source = soldes débit/crédit de clôture.
+        ws.cell(i, 3).value = 0.0
+        ws.cell(i, 4).value = 0.0
+        ws.cell(i, 5).value = 0.0
+        ws.cell(i, 6).value = 0.0
+        ws.cell(i, 7).value = debit
+        ws.cell(i, 8).value = credit
 
 
 def _sum_prefix(lines, prefixes, positive=None):
@@ -397,7 +432,7 @@ def _fill_project_trt(ws, data):
         ws["G46"] = data.get("solde_releves_bancaires", 0)
 
 
-def export_liasse(result, output_path, entite_nom="Entité", exercice=""):
+def export_liasse(result, output_path, entite_nom="Entité", exercice="", identification=None):
     """Copie le template officiel correspondant au mode puis le remplit."""
     mode = result.get("mode", "association")
     template_name = "EtaFi_SYCEBNL_PROJET.xlsx" if mode == "projet" else "EtaFi_SYCEBNL_AOP.xlsx"
@@ -411,15 +446,17 @@ def export_liasse(result, output_path, entite_nom="Entité", exercice=""):
     copyfile(template, output_path)
     wb = load_workbook(output_path, keep_links=True)
 
-    _write_headers(wb, entite_nom, exercice)
+    _write_headers(wb, identification or {"denomination": entite_nom}, exercice)
     lines = result.get("lines")
     lines_n1 = result.get("lines_n1")
+    balance_source = result.get("balance_source")
+    balance_n1_source = result.get("balance_n1_source")
 
     if mode == "projet":
         if "ANNEE N" in wb.sheetnames:
-            _balance_rows(wb["ANNEE N"], lines if lines is not None else [])
+            _balance_rows(wb["ANNEE N"], balance_source if balance_source is not None else [])
         if "ANNEE N-1" in wb.sheetnames and lines_n1 is not None:
-            _balance_rows(wb["ANNEE N-1"], lines_n1)
+            _balance_rows(wb["ANNEE N-1"], balance_n1_source)
         if "BILAN" in wb.sheetnames:
             _fill_project_bilan(wb["BILAN"], lines)
         if "CPTE EXPLOITATION" in wb.sheetnames:
@@ -432,9 +469,9 @@ def export_liasse(result, output_path, entite_nom="Entité", exercice=""):
             _fill_project_trt(wb["TRT"], result.get("reconciliation_tresorerie"))
     else:
         if "BALANCE N" in wb.sheetnames:
-            _balance_rows(wb["BALANCE N"], lines if lines is not None else [])
+            _balance_rows(wb["BALANCE N"], balance_source if balance_source is not None else [])
         if "FeuiBALANCE N-1" in wb.sheetnames and lines_n1 is not None:
-            _balance_rows(wb["FeuiBALANCE N-1"], lines_n1)
+            _balance_rows(wb["FeuiBALANCE N-1"], balance_n1_source)
         if "BILAN" in wb.sheetnames:
             _fill_aop_bilan(wb["BILAN"], lines, lines_n1)
         if "COMPTE-RESULTAT" in wb.sheetnames:
