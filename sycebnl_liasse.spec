@@ -11,7 +11,12 @@ a = Analysis(
     ['src/main.py'],
     pathex=['src'],
     binaries=[],
-    datas=[],
+    datas=[
+        ('templates/EtaFi_SYCEBNL_AOP.xlsx', 'templates'),
+        ('templates/EtaFi_SYCEBNL_PROJET.xlsx', 'templates'),
+        ('templates/modele_balance_sycebnl.xlsx', 'templates'),
+        ('templates/modele_budget_sycebnl.xlsx', 'templates'),
+    ],
     hiddenimports=[
         'pandas', 'openpyxl', 'openpyxl.cell._writer',
     ],

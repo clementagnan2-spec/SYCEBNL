@@ -182,6 +182,7 @@ def generate(balance_df, balance_n1_df=None):
     return {
         "mode": "association",
         "lines": lines,
+        "lines_n1": lines_n1 if balance_n1_df is not None else None,
         "non_classes": non_classes,
         "bilan": bilan,
         "compte_resultat": compte_resultat,

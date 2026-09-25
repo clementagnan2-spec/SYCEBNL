@@ -26,7 +26,7 @@ import excel_export
 import templates
 
 APP_TITLE = "Générateur de liasse SYCEBNL"
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.1.0"
 
 
 def resource_path(relative_path):
